@@ -5,6 +5,18 @@ const { deleteImage } = require('../config/cloudinary');
 const logger = require('../utils/logger');
 const { logActivity } = require('../utils/activityLogger');
 
+// super_admin has no academyId of their own — they must pass one explicitly
+// (query for reads, body for creates); every other role is locked to theirs.
+function resolveAcademyId(req, paramAcademyId) {
+  if (req.user.role === 'super_admin') return paramAcademyId;
+  return req.user.academyId?.toString();
+}
+
+function hasAccess(req, recordAcademyId) {
+  if (req.user.role === 'super_admin') return true;
+  return recordAcademyId.toString() === req.user.academyId?.toString();
+}
+
 const parseArrayField = (raw) => {
   if (raw === undefined || raw === null) return undefined;
   if (Array.isArray(raw)) return raw.map((s) => String(s).trim()).filter(Boolean);
@@ -28,7 +40,10 @@ const getStaff = async (req, res, next) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
   const skip = (page - 1) * limit;
 
-  const filter = { academyId: req.user.academyId };
+  const academyId = resolveAcademyId(req, req.query.academyId);
+  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+
+  const filter = { academyId };
 
   if (req.query.showInactive !== 'true') {
     filter.isActive = true;
@@ -51,7 +66,7 @@ const getStaff = async (req, res, next) => {
 const getStaffById = async (req, res, next) => {
   const staff = await Staff.findById(req.params.id);
   if (!staff) return next(new AppError('الموظف غير موجود', 404));
-  if (staff.academyId.toString() !== req.user.academyId?.toString()) {
+  if (!hasAccess(req, staff.academyId)) {
     return next(new AppError('ليس لديك صلاحية للوصول إلى هذا الموظف', 403));
   }
   return sendSuccess(res, { data: staff, message: 'تم جلب بيانات الموظف بنجاح' });
@@ -64,8 +79,11 @@ const createStaff = async (req, res, next) => {
     monthlyAttendanceTarget, deductionType, deductionValue,
   } = req.body;
 
+  const academyId = resolveAcademyId(req, req.body.academyId);
+  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+
   const staffData = {
-    academyId: req.user.academyId,
+    academyId,
     fullName,
     position,
     phone,
@@ -100,7 +118,7 @@ const createStaff = async (req, res, next) => {
 const updateStaff = async (req, res, next) => {
   const staff = await Staff.findById(req.params.id).select('+photo_public_id');
   if (!staff) return next(new AppError('الموظف غير موجود', 404));
-  if (staff.academyId.toString() !== req.user.academyId?.toString()) {
+  if (!hasAccess(req, staff.academyId)) {
     return next(new AppError('ليس لديك صلاحية لتعديل هذا الموظف', 403));
   }
 
@@ -137,7 +155,7 @@ const updateStaff = async (req, res, next) => {
 const deleteStaff = async (req, res, next) => {
   const staff = await Staff.findById(req.params.id);
   if (!staff) return next(new AppError('الموظف غير موجود', 404));
-  if (staff.academyId.toString() !== req.user.academyId?.toString()) {
+  if (!hasAccess(req, staff.academyId)) {
     return next(new AppError('ليس لديك صلاحية لحذف هذا الموظف', 403));
   }
 
