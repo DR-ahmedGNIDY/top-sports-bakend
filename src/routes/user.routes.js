@@ -9,6 +9,7 @@ const {
   deactivateUser,
   getUsersByAcademy,
   getUserById,
+  getSupervisors,
 } = require('../controllers/user.controller');
 const { protect, restrictTo } = require('../middleware/auth.middleware');
 const validate = require('../middleware/validate');
@@ -29,11 +30,12 @@ const createUserValidators = [
     .notEmpty().withMessage('كلمة المرور مطلوبة')
     .isLength({ min: 8 }).withMessage('كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
   body('academyId')
+    .if((value, { req }) => req.body.role !== 'academy_supervisor')
     .notEmpty().withMessage('معرف الأكاديمية مطلوب')
     .isMongoId().withMessage('معرف الأكاديمية غير صحيح'),
   body('role')
     .optional()
-    .isIn(['academy_admin', 'admin']).withMessage('الدور غير صحيح'),
+    .isIn(['academy_admin', 'admin', 'academy_supervisor']).withMessage('الدور غير صحيح'),
 ];
 
 const updateUserValidators = [
@@ -50,6 +52,14 @@ const mongoIdParam = (paramName) =>
   param(paramName).isMongoId().withMessage(`معرف ${paramName} غير صحيح`);
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
+
+// GET /api/v1/users/supervisors — super_admin only; lists all academy_supervisor accounts
+router.get(
+  '/supervisors',
+  protect,
+  restrictTo('super_admin'),
+  getSupervisors
+);
 
 // GET /api/v1/users/academy/:academyId — protected; role-scoped in controller
 router.get(

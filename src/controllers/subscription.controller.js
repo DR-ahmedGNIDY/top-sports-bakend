@@ -4,6 +4,7 @@ const AppError = require('../utils/AppError');
 const { sendSuccess, sendPaginated } = require('../utils/apiResponse');
 const logger = require('../utils/logger');
 const { logActivity } = require('../utils/activityLogger');
+const { isGlobalScopeRole } = require('../utils/permissions');
 
 // ─── Helper: resolve and verify academyId access ────────────────────────────
 /**
@@ -11,8 +12,8 @@ const { logActivity } = require('../utils/activityLogger');
  * an academy_admin tries to access a different academy.
  */
 function resolveAcademyId(req, paramAcademyId) {
-  // super_admin يثق بالـ id المُمرّر؛ أي دور آخر (admin/academy_admin) مُقيَّد بأكاديميته.
-  if (req.user.role === 'super_admin') {
+  // super_admin/academy_supervisor يثقان بالـ id المُمرّر؛ أي دور آخر مُقيَّد بأكاديميته.
+  if (isGlobalScopeRole(req.user.role)) {
     return paramAcademyId;
   }
   return req.user.academyId?.toString();
@@ -24,7 +25,7 @@ const createSubscription = async (req, res, next) => {
 
   // Determine academyId — super_admin يحدّدها، غيره مُقيَّد بأكاديميته.
   let academyId;
-  if (req.user.role === 'super_admin') {
+  if (isGlobalScopeRole(req.user.role)) {
     academyId = req.body.academyId;
     if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
   } else {
@@ -82,7 +83,7 @@ const updateSubscriptionNotes = async (req, res, next) => {
 
   // Academy access check
   if (
-    req.user.role !== 'super_admin' &&
+    !isGlobalScopeRole(req.user.role) &&
     subscription.academyId.toString() !== req.user.academyId?.toString()
   ) {
     return next(new AppError('ليس لديك صلاحية لتعديل هذا الاشتراك', 403));
@@ -103,7 +104,7 @@ const freezeSubscription = async (req, res, next) => {
   if (!subscription) return next(new AppError('الاشتراك غير موجود', 404));
 
   if (
-    req.user.role !== 'super_admin' &&
+    !isGlobalScopeRole(req.user.role) &&
     subscription.academyId.toString() !== req.user.academyId?.toString()
   ) {
     return next(new AppError('ليس لديك صلاحية لتجميد هذا الاشتراك', 403));
@@ -144,7 +145,7 @@ const resumeSubscription = async (req, res, next) => {
   if (!subscription) return next(new AppError('الاشتراك غير موجود', 404));
 
   if (
-    req.user.role !== 'super_admin' &&
+    !isGlobalScopeRole(req.user.role) &&
     subscription.academyId.toString() !== req.user.academyId?.toString()
   ) {
     return next(new AppError('ليس لديك صلاحية لاستئناف هذا الاشتراك', 403));
@@ -175,6 +176,10 @@ const resumeSubscription = async (req, res, next) => {
 
 // ─── DELETE /:id ─────────────────────────────────────────────────────────────
 const deleteSubscription = async (req, res, next) => {
+  if (req.user.role === 'academy_supervisor') {
+    return next(new AppError('ليس لديك صلاحية لحذف الاشتراكات', 403));
+  }
+
   const subscription = await Subscription.findById(req.params.id);
   if (!subscription) return next(new AppError('الاشتراك غير موجود', 404));
 
@@ -211,7 +216,7 @@ const getSubscriptionById = async (req, res, next) => {
     subscription.academyId?._id?.toString() || subscription.academyId?.toString();
 
   if (
-    req.user.role !== 'super_admin' &&
+    !isGlobalScopeRole(req.user.role) &&
     academyIdStr !== req.user.academyId?.toString()
   ) {
     return next(new AppError('ليس لديك صلاحية للوصول إلى هذا الاشتراك', 403));
@@ -230,7 +235,7 @@ const getSubscriptionsByPlayer = async (req, res, next) => {
 
   // academy_admin can only see players from their own academy
   if (
-    req.user.role !== 'super_admin' &&
+    !isGlobalScopeRole(req.user.role) &&
     player.academyId.toString() !== req.user.academyId?.toString()
   ) {
     return next(new AppError('ليس لديك صلاحية للوصول إلى اشتراكات هذا اللاعب', 403));
@@ -257,7 +262,7 @@ const getSubscriptionsByPlayer = async (req, res, next) => {
 const getSubscriptionsByAcademy = async (req, res, next) => {
   // Resolve the target academy
   let academyId;
-  if (req.user.role === 'super_admin') {
+  if (isGlobalScopeRole(req.user.role)) {
     // بدون معرّف صريح => بدون فلتر (كل الأكاديميات).
     academyId = req.params.academyId;
   } else {
@@ -314,7 +319,7 @@ const getSubscriptionsByAcademy = async (req, res, next) => {
 const getRevenueSummary = async (req, res, next) => {
   // Resolve academy
   let academyId;
-  if (req.user.role === 'super_admin') {
+  if (isGlobalScopeRole(req.user.role)) {
     // بدون معرّف صريح => ملخص لكل الأكاديميات.
     academyId = req.params.academyId;
   } else {

@@ -5,6 +5,7 @@ const { sendSuccess, sendPaginated } = require('../utils/apiResponse');
 const { deleteImage } = require('../config/cloudinary');
 const logger = require('../utils/logger');
 const { logActivity } = require('../utils/activityLogger');
+const { isGlobalScopeRole } = require('../utils/permissions');
 
 // Normalize an array field coming from multipart/form-data.
 // Accepts: a real array, a JSON-encoded array string, or a comma-separated string.
@@ -44,7 +45,7 @@ const getPlayers = async (req, res, next) => {
   // Academy scope — كل مستخدم غير super_admin مُقيَّد حتمياً بأكاديميته.
   // super_admin فقط يمرّر academyId صراحةً. (يشمل دور admin + academy_admin.)
   // إن لم يمرّر super_admin أي academyId → لا فلتر (نتائج كل الأكاديميات).
-  if (req.user.role === 'super_admin') {
+  if (isGlobalScopeRole(req.user.role)) {
     if (req.query.academyId) {
       filter.academyId = req.query.academyId;
     }
@@ -121,7 +122,7 @@ const searchPlayers = async (req, res, next) => {
     ],
   };
 
-  if (req.user.role === 'super_admin') {
+  if (isGlobalScopeRole(req.user.role)) {
     if (req.query.academyId) {
       filter.academyId = req.query.academyId;
     }
@@ -139,7 +140,7 @@ const getPlayerById = async (req, res, next) => {
   const player = await Player.findById(req.params.id);
   if (!player) return next(new AppError('اللاعب غير موجود', 404));
 
-  if (req.user.role !== 'super_admin' &&
+  if (!isGlobalScopeRole(req.user.role) &&
       player.academyId.toString() !== req.user.academyId?.toString()) {
     return next(new AppError('ليس لديك صلاحية للوصول إلى هذا اللاعب', 403));
   }
@@ -151,7 +152,7 @@ const getPlayerById = async (req, res, next) => {
 const createPlayer = async (req, res, next) => {
   // Determine academyId — super_admin يحدّدها، غيره مُقيَّد بأكاديميته.
   let academyId;
-  if (req.user.role === 'super_admin') {
+  if (isGlobalScopeRole(req.user.role)) {
     academyId = req.body.academyId;
     if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
   } else {
@@ -229,7 +230,7 @@ const updatePlayer = async (req, res, next) => {
   const player = await Player.findById(req.params.id).select('+image_public_id');
   if (!player) return next(new AppError('اللاعب غير موجود', 404));
 
-  if (req.user.role !== 'super_admin' &&
+  if (!isGlobalScopeRole(req.user.role) &&
       player.academyId.toString() !== req.user.academyId?.toString()) {
     return next(new AppError('ليس لديك صلاحية لتعديل هذا اللاعب', 403));
   }
@@ -280,6 +281,10 @@ const updatePlayer = async (req, res, next) => {
 
 // ─── DELETE /players/:id ─────────────────────────────────────────────────────
 const deletePlayer = async (req, res, next) => {
+  if (req.user.role === 'academy_supervisor') {
+    return next(new AppError('ليس لديك صلاحية لحذف اللاعبين', 403));
+  }
+
   const player = await Player.findById(req.params.id);
   if (!player) return next(new AppError('اللاعب غير موجود', 404));
 
@@ -301,6 +306,10 @@ const deletePlayer = async (req, res, next) => {
 
 // ─── DELETE /players/:id/image ───────────────────────────────────────────────
 const deletePlayerImage = async (req, res, next) => {
+  if (req.user.role === 'academy_supervisor') {
+    return next(new AppError('ليس لديك صلاحية لحذف صور اللاعبين', 403));
+  }
+
   const player = await Player.findById(req.params.id).select('+image_public_id');
   if (!player) return next(new AppError('اللاعب غير موجود', 404));
 

@@ -16,13 +16,21 @@ const createUser = async (req, res, next) => {
   // ─────────────────────────────────────────────────────────────────────────
   const { name, email, password, academyId, role: requestedRole } = req.body;
 
-  // Verify the target academy exists and is active
-  const academy = await Academy.findById(academyId);
-  if (!academy) {
-    return next(new AppError('الأكاديمية المحددة غير موجودة', 404));
-  }
-  if (!academy.isActive) {
-    return next(new AppError('لا يمكن إضافة مستخدم إلى أكاديمية غير نشطة', 400));
+  // super_admin can create academy_admin, admin, or academy_supervisor; default to academy_admin
+  const allowedRoles = ['academy_admin', 'admin', 'academy_supervisor'];
+  const newRole = allowedRoles.includes(requestedRole) ? requestedRole : 'academy_admin';
+  logger.info(`createUser — requestedRole="${requestedRole}" → newRole="${newRole}"`);
+
+  // academy_supervisor is not bound to a single academy — academyId is optional.
+  let academy = null;
+  if (newRole !== 'academy_supervisor') {
+    academy = await Academy.findById(academyId);
+    if (!academy) {
+      return next(new AppError('الأكاديمية المحددة غير موجودة', 404));
+    }
+    if (!academy.isActive) {
+      return next(new AppError('لا يمكن إضافة مستخدم إلى أكاديمية غير نشطة', 400));
+    }
   }
 
   // Prevent duplicate emails
@@ -31,23 +39,18 @@ const createUser = async (req, res, next) => {
     return next(new AppError('البريد الإلكتروني مستخدم بالفعل', 409));
   }
 
-  // super_admin can create academy_admin or admin; default to academy_admin
-  const allowedRoles = ['academy_admin', 'admin'];
-  const newRole = allowedRoles.includes(requestedRole) ? requestedRole : 'academy_admin';
-  logger.info(`createUser — requestedRole="${requestedRole}" → newRole="${newRole}"`);
-
   const user = await User.create({
     name,
     email,
     password,
     role: newRole,
-    academyId,
+    ...(newRole !== 'academy_supervisor' ? { academyId } : {}),
   });
 
-  logger.info(`User created: ${user.email} for academy ${academy.name} by ${req.user.email}`);
+  logger.info(`User created: ${user.email} (${newRole}) by ${req.user.email}`);
   logActivity(req, {
     actionType: 'ADD_USER', entityType: 'USER',
-    entityId: user._id, entityName: user.name, academyId,
+    entityId: user._id, entityName: user.name, academyId: academy?._id,
   });
 
   // Populate academyId before returning so the response includes academy details
@@ -260,6 +263,20 @@ const getUserById = async (req, res, next) => {
   return sendSuccess(res, { data: user });
 };
 
+/**
+ * GET /api/v1/users/supervisors
+ * super_admin only — lists all academy_supervisor accounts (not academy-scoped).
+ */
+const getSupervisors = async (req, res, next) => {
+  const supervisors = await User.find({ role: 'academy_supervisor' })
+    .sort({ created_at: -1 });
+
+  return sendSuccess(res, {
+    data: supervisors,
+    message: 'تم جلب المشرفين بنجاح',
+  });
+};
+
 module.exports = {
   createUser,
   updateUser,
@@ -269,4 +286,5 @@ module.exports = {
   deactivateUser,
   getUsersByAcademy,
   getUserById,
+  getSupervisors,
 };

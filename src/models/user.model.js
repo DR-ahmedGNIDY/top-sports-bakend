@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['super_admin', 'academy_admin', 'admin', 'coach', 'staff'],
+      enum: ['super_admin', 'academy_admin', 'admin', 'coach', 'staff', 'academy_supervisor'],
       default: 'academy_admin',
     },
     academyId: {

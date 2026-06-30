@@ -70,7 +70,7 @@ router.get('/player/:playerId', getSubscriptionsByPlayer);
 router.get('/academy/:academyId/revenue', restrictTo('super_admin', 'academy_admin'), getRevenueSummary);
 
 // GET  /subscriptions/academy/:academyId — admin blocked (uses player-level access instead)
-router.get('/academy/:academyId', restrictTo('super_admin', 'academy_admin'), getSubscriptionsByAcademy);
+router.get('/academy/:academyId', restrictTo('super_admin', 'academy_admin', 'academy_supervisor'), getSubscriptionsByAcademy);
 
 // GET  /subscriptions/:id
 router.get('/:id', getSubscriptionById);

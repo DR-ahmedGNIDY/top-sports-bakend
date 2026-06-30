@@ -1,6 +1,7 @@
 const AppError = require('../utils/AppError');
 const { verifyToken } = require('../utils/jwt');
 const User = require('../models/user.model');
+const { hasPermission } = require('../utils/permissions');
 
 const protect = async (req, res, next) => {
   let token;
@@ -36,4 +37,16 @@ const restrictTo = (...roles) => {
   };
 };
 
-module.exports = { protect, restrictTo };
+// requirePermission(permission) — gates a route via the hasPermission() helper
+// instead of an explicit role allowlist. Use for routes shared across roles
+// with different permission sets (e.g. ACADEMY_SUPERVISOR vs ADMIN).
+const requirePermission = (permission) => {
+  return (req, res, next) => {
+    if (!hasPermission(req.user, permission)) {
+      return next(new AppError('ليس لديك صلاحية لتنفيذ هذا الإجراء', 403));
+    }
+    next();
+  };
+};
+
+module.exports = { protect, restrictTo, requirePermission };

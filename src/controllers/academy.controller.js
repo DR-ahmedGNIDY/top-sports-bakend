@@ -4,6 +4,7 @@ const { sendSuccess } = require('../utils/apiResponse');
 const { deleteImage } = require('../config/cloudinary');
 const logger = require('../utils/logger');
 const { logActivity } = require('../utils/activityLogger');
+const { isGlobalScopeRole } = require('../utils/permissions');
 
 // Normalize the `sports` field coming from multipart/form-data.
 // Accepts: a real array, a JSON-encoded array string, or a comma-separated string.
@@ -27,8 +28,8 @@ const parseSports = (raw) => {
 const getAcademies = async (req, res, next) => {
   let query = { isActive: true };
 
-  // أي مستخدم غير super_admin يرى أكاديميته فقط.
-  if (req.user.role !== 'super_admin') {
+  // أي مستخدم غير super_admin/academy_supervisor يرى أكاديميته فقط.
+  if (!isGlobalScopeRole(req.user.role)) {
     query._id = req.user.academyId;
   }
 
@@ -44,7 +45,7 @@ const getAcademyById = async (req, res, next) => {
 
   if (!academy) return next(new AppError('الأكاديمية غير موجودة', 404));
 
-  if (req.user.role !== 'super_admin' &&
+  if (!isGlobalScopeRole(req.user.role) &&
       academy._id.toString() !== req.user.academyId?.toString()) {
     return next(new AppError('ليس لديك صلاحية للوصول إلى هذه الأكاديمية', 403));
   }
@@ -71,6 +72,10 @@ const createAcademy = async (req, res, next) => {
 };
 
 const updateAcademy = async (req, res, next) => {
+  if (req.user.role === 'academy_supervisor') {
+    return next(new AppError('ليس لديك صلاحية لتعديل الأكاديميات', 403));
+  }
+
   const academy = await Academy.findById(req.params.id).select('+logo_public_id');
   if (!academy) return next(new AppError('الأكاديمية غير موجودة', 404));
 
