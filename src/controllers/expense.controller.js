@@ -21,10 +21,14 @@ const getExpenses = async (req, res, next) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
   const skip = (page - 1) * limit;
 
+  // super_admin بدون academyId صريح → بدون فلتر (كل الأكاديميات).
   const academyId = resolveAcademyId(req, req.query.academyId);
-  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  if (!academyId && req.user.role !== 'super_admin') {
+    return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  }
 
-  const filter = { academyId };
+  const filter = {};
+  if (academyId) filter.academyId = academyId;
   if (req.query.category) filter.category = req.query.category;
   if (req.query.startDate || req.query.endDate) {
     filter.date = {};
@@ -121,12 +125,14 @@ const getExpenseReport = async (req, res, next) => {
   }
 
   const academyId = resolveAcademyId(req, req.query.academyId);
-  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  if (!academyId && req.user.role !== 'super_admin') {
+    return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  }
 
   const matchFilter = {
-    academyId,
     date: { $gte: startDate, $lte: endDate },
   };
+  if (academyId) matchFilter.academyId = academyId;
 
   const [byCategory, totals] = await Promise.all([
     Expense.aggregate([

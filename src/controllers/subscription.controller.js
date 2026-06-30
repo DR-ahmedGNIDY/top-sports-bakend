@@ -258,8 +258,8 @@ const getSubscriptionsByAcademy = async (req, res, next) => {
   // Resolve the target academy
   let academyId;
   if (req.user.role === 'super_admin') {
+    // بدون معرّف صريح => بدون فلتر (كل الأكاديميات).
     academyId = req.params.academyId;
-    if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
   } else {
     academyId = req.user.academyId?.toString();
     // أي دور غير super مُقيَّد بأكاديميته ولا يستطيع طلب أكاديمية أخرى.
@@ -272,7 +272,8 @@ const getSubscriptionsByAcademy = async (req, res, next) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
   const skip = (page - 1) * limit;
 
-  const filter = { academyId };
+  const filter = {};
+  if (academyId) filter.academyId = academyId;
 
   // Type filter
   if (req.query.type && ['NEW_SUBSCRIPTION', 'RENEWAL'].includes(req.query.type)) {
@@ -314,8 +315,8 @@ const getRevenueSummary = async (req, res, next) => {
   // Resolve academy
   let academyId;
   if (req.user.role === 'super_admin') {
+    // بدون معرّف صريح => ملخص لكل الأكاديميات.
     academyId = req.params.academyId;
-    if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
   } else {
     academyId = req.user.academyId?.toString();
     if (req.params.academyId && req.params.academyId !== academyId) {
@@ -328,10 +329,10 @@ const getRevenueSummary = async (req, res, next) => {
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
   const mongoose = require('mongoose');
-  const academyObjectId = new mongoose.Types.ObjectId(academyId);
+  const matchStage = academyId ? { academyId: new mongoose.Types.ObjectId(academyId) } : {};
 
   const [summary] = await Subscription.aggregate([
-    { $match: { academyId: academyObjectId } },
+    { $match: matchStage },
     {
       $facet: {
         totalRevenue: [

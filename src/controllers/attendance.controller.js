@@ -124,12 +124,9 @@ const getAttendance = async (req, res, next) => {
 
   const filter = {};
 
-  // نطاق الأكاديمية إلزامي — super_admin يمرّر academyId، وغيره مُقيَّد بأكاديميته.
+  // super_admin بدون academyId صريح → بدون فلتر (كل الأكاديميات).
   if (req.user.role === 'super_admin') {
-    if (!req.query.academyId) {
-      return next(new AppError('معرّف الأكاديمية مطلوب', 400));
-    }
-    filter.academyId = req.query.academyId;
+    if (req.query.academyId) filter.academyId = req.query.academyId;
   } else {
     filter.academyId = req.user.academyId;
   }
@@ -190,12 +187,10 @@ const weekdayCountsInRange = (startStr, endStr) => {
 // تقرير الحضور/الغياب — استعلامان فقط (لاعبون + تجميع الحضور) ثم حساب في الذاكرة.
 const getAttendanceReport = async (req, res, next) => {
   // نطاق الأكاديمية — super_admin يمرّر academyId، وغيره مُقيَّد بأكاديميته.
+  // super_admin بدون academyId صريح → التقرير يشمل كل الأكاديميات.
   let academyId;
   if (req.user.role === 'super_admin') {
-    if (!req.query.academyId) {
-      return next(new AppError('معرّف الأكاديمية مطلوب', 400));
-    }
-    academyId = req.query.academyId;
+    academyId = req.query.academyId || null;
   } else {
     academyId = req.user.academyId;
   }
@@ -211,17 +206,18 @@ const getAttendanceReport = async (req, res, next) => {
   const sport = (req.query.sport && req.query.sport.trim().length > 0)
     ? req.query.sport.trim() : null;
 
-  // (أ) لاعبو الأكاديمية النشطون
-  const playerFilter = { academyId, isActive: true };
+  // (أ) لاعبو الأكاديمية النشطون (أو كل الأكاديميات إن لم يُحدَّد academyId)
+  const playerFilter = { isActive: true };
+  if (academyId) playerFilter.academyId = academyId;
   if (sport) playerFilter.sport = sport;
   const players = await Player.find(playerFilter)
     .select('fullName playerCode sport attendanceDays');
 
   // (ب) تجميع الحضور خلال الفترة لكل لاعب
   const matchStage = {
-    academyId: new mongoose.Types.ObjectId(String(academyId)),
     date: { $gte: startDate, $lte: endDate },
   };
+  if (academyId) matchStage.academyId = new mongoose.Types.ObjectId(String(academyId));
   if (sport) matchStage.sport = sport;
   const agg = await Attendance.aggregate([
     { $match: matchStage },

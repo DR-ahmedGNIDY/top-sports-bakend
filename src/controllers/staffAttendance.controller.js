@@ -49,9 +49,12 @@ const markAttendance = async (req, res, next) => {
 // ─── GET /staff-attendance ───────────────────────────────────────────────────
 const getAttendanceHistory = async (req, res, next) => {
   const academyId = resolveAcademyId(req, req.query.academyId);
-  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  if (req.user.role !== 'super_admin' && !academyId) {
+    return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  }
 
-  const filter = { academyId };
+  const filter = {};
+  if (academyId) filter.academyId = academyId;
 
   if (req.query.staffId) filter.staffId = req.query.staffId;
 
@@ -73,19 +76,23 @@ const getAttendanceReport = async (req, res, next) => {
   }
 
   const academyId = resolveAcademyId(req, req.query.academyId);
-  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  if (req.user.role !== 'super_admin' && !academyId) {
+    return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  }
 
   const matchFilter = {
-    academyId,
     date: { $gte: startDate, $lte: endDate },
   };
+  if (academyId) matchFilter.academyId = academyId;
 
   const counts = await StaffAttendance.aggregate([
     { $match: matchFilter },
     { $group: { _id: { staffId: '$staffId', status: '$status' }, count: { $sum: 1 } } },
   ]);
 
-  const staffList = await Staff.find({ academyId, isActive: true })
+  const staffFilter = { isActive: true };
+  if (academyId) staffFilter.academyId = academyId;
+  const staffList = await Staff.find(staffFilter)
     .select('fullName position');
 
   const report = staffList.map((s) => {

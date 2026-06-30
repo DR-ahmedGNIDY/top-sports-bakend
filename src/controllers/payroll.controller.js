@@ -107,10 +107,14 @@ const generatePayroll = async (req, res, next) => {
 
 // ─── GET /payroll ────────────────────────────────────────────────────────────
 const getPayrollList = async (req, res, next) => {
+  // super_admin بدون academyId صريح → بدون فلتر (كل الأكاديميات).
   const academyId = resolveAcademyId(req, req.query.academyId);
-  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  if (!academyId && req.user.role !== 'super_admin') {
+    return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  }
 
-  const filter = { academyId };
+  const filter = {};
+  if (academyId) filter.academyId = academyId;
   if (req.query.month) filter.month = req.query.month;
   if (req.query.staffId) filter.staffId = req.query.staffId;
   if (req.query.status) filter.status = req.query.status;
@@ -127,9 +131,14 @@ const getPayrollReport = async (req, res, next) => {
   }
 
   const academyId = resolveAcademyId(req, req.query.academyId);
-  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  if (!academyId && req.user.role !== 'super_admin') {
+    return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  }
 
-  const records = await Payroll.find({ academyId, month })
+  const reportFilter = { month };
+  if (academyId) reportFilter.academyId = academyId;
+
+  const records = await Payroll.find(reportFilter)
     .populate('staffId', 'fullName position');
 
   const report = records.map((r) => ({

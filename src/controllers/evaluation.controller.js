@@ -196,7 +196,10 @@ const getEvaluationsByAcademy = async (req, res, next) => {
     ? req.params.academyId
     : req.user.academyId;
 
-  if (!academyId) return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  // غير super_admin يجب أن تكون له أكاديمية محددة دائمًا.
+  if (req.user.role !== 'super_admin' && !academyId) {
+    return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+  }
 
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
@@ -207,7 +210,8 @@ const getEvaluationsByAcademy = async (req, res, next) => {
   if (req.query.startDate) dateFilter.$gte = new Date(req.query.startDate);
   if (req.query.endDate) dateFilter.$lte = new Date(req.query.endDate);
 
-  const query = { academyId };
+  // super_admin بدون معرّف أكاديمية صريح => بدون فلتر (كل الأكاديميات).
+  const query = academyId ? { academyId } : {};
   if (Object.keys(dateFilter).length) query.created_at = dateFilter;
 
   const [evaluations, total] = await Promise.all([

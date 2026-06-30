@@ -7,10 +7,9 @@ const { logActivity } = require('../utils/activityLogger');
 
 const resolveAcademyFilter = (req, filter) => {
   if (req.user.role === 'super_admin') {
-    if (!req.query.academyId && !req.body.academyId) {
-      throw new AppError('معرّف الأكاديمية مطلوب', 400);
-    }
-    filter.academyId = req.query.academyId || req.body.academyId;
+    // بدون academyId صريح → بدون فلتر (كل الأكاديميات).
+    const academyId = req.query.academyId || req.body.academyId;
+    if (academyId) filter.academyId = academyId;
   } else {
     filter.academyId = req.user.academyId;
   }

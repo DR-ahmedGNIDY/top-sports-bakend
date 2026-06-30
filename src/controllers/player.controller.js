@@ -43,11 +43,11 @@ const getPlayers = async (req, res, next) => {
 
   // Academy scope — كل مستخدم غير super_admin مُقيَّد حتمياً بأكاديميته.
   // super_admin فقط يمرّر academyId صراحةً. (يشمل دور admin + academy_admin.)
+  // إن لم يمرّر super_admin أي academyId → لا فلتر (نتائج كل الأكاديميات).
   if (req.user.role === 'super_admin') {
-    if (!req.query.academyId) {
-      return next(new AppError('معرّف الأكاديمية مطلوب', 400));
+    if (req.query.academyId) {
+      filter.academyId = req.query.academyId;
     }
-    filter.academyId = req.query.academyId;
   } else {
     filter.academyId = req.user.academyId;
   }
@@ -122,10 +122,9 @@ const searchPlayers = async (req, res, next) => {
   };
 
   if (req.user.role === 'super_admin') {
-    if (!req.query.academyId) {
-      return next(new AppError('معرّف الأكاديمية مطلوب للبحث', 400));
+    if (req.query.academyId) {
+      filter.academyId = req.query.academyId;
     }
-    filter.academyId = req.query.academyId;
   } else {
     filter.academyId = req.user.academyId;
   }
